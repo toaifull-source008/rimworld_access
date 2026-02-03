@@ -20,10 +20,10 @@ namespace RimWorldAccess
     public abstract class BaseNavigationHandler : IKeyboardInputHandler
     {
         /// <summary>
-        /// Priority level (lower = higher priority, processed first).
-        /// Use constants from InputHandlerPriority.
+        /// Priority band for this handler. Bands are coarse categories;
+        /// handlers within the same band should be mutually exclusive.
         /// </summary>
-        public abstract int Priority { get; }
+        public abstract InputPriorityBand Priority { get; }
 
         /// <summary>
         /// Whether this handler should receive input.

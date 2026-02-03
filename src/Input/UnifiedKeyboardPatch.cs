@@ -84,11 +84,22 @@ namespace RimWorldAccess
             if (key == KeyCode.None)
                 return;
 
-            // ===== PHASE 1: Test router in shadow mode =====
-            // This triggers lazy initialization and logs to verify the router is working
-            // In shadow mode, it logs but doesn't consume events (existing code continues to work)
+            // ===== NEW ROUTER SYSTEM (ACTIVE) =====
+            // Route input to registered handlers via KeyboardInputRouter
+            // Handlers are explicitly registered in HandlerRegistry
+            // As states are migrated to IKeyboardInputHandler, they'll be handled here
+            // Once all states are migrated, the manual routing below can be removed
             var routerContext = new KeyboardInputContext(Event.current);
-            KeyboardInputRouter.ProcessInput(routerContext);
+            if (KeyboardInputRouter.ProcessInput(routerContext))
+            {
+                Event.current.Use();
+                return;
+            }
+
+            // ===== LEGACY MANUAL ROUTING (TRANSITIONAL) =====
+            // The code below is the original manual routing system
+            // It will be removed once all states implement IKeyboardInputHandler
+            // and are registered in HandlerRegistry
 
             // ===== PRIORITY -1: Block ALL keys if text input mode is active =====
             // Zone/storage rename needs to capture text input, so block everything here

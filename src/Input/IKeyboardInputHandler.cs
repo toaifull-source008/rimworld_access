@@ -2,15 +2,16 @@ namespace RimWorldAccess
 {
     /// <summary>
     /// Contract for keyboard input handlers.
-    /// Handlers are discovered automatically via reflection and invoked by KeyboardInputRouter in priority order.
+    /// Handlers must be explicitly registered via HandlerRegistry and are invoked by KeyboardInputRouter in priority order.
     /// </summary>
     public interface IKeyboardInputHandler
     {
         /// <summary>
-        /// Priority level (lower = higher priority, processed first).
-        /// Use constants from InputHandlerPriority.
+        /// Priority band for this handler. Bands are coarse categories;
+        /// handlers within the same band should be mutually exclusive.
+        /// Lower value = higher priority (processed first).
         /// </summary>
-        int Priority { get; }
+        InputPriorityBand Priority { get; }
 
         /// <summary>
         /// Whether this handler should receive input.

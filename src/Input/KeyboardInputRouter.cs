@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
-using System.Reflection;
 using UnityEngine;
 using Verse;
 
@@ -9,140 +9,57 @@ namespace RimWorldAccess
 {
     /// <summary>
     /// Central registry and dispatcher for keyboard input handlers.
-    /// Discovers handlers automatically via reflection (zero registration bookkeeping).
-    /// Routes input to active handlers in priority order (lower number = higher priority).
+    /// Routes input to active handlers in priority order (lower band number = higher priority).
+    /// Handles frame isolation to prevent Escape key from propagating to parent windows.
     /// </summary>
     public static class KeyboardInputRouter
     {
-        private static List<IKeyboardInputHandler> allHandlers = null;
+        private static List<IKeyboardInputHandler> handlers;
         private static int lastClosedFrame = -1;
 
         /// <summary>
-        /// Shadow mode control (default: enabled during Phase 1).
-        /// When enabled, router logs what would happen but doesn't consume events.
+        /// Initialize the router with all handlers. Called once at mod startup.
         /// </summary>
-        public static bool ShadowModeEnabled { get; set; } = true;
-
-        /// <summary>
-        /// Shadow mode logging control (default: enabled).
-        /// When enabled, router logs active handlers and priority conflicts.
-        /// </summary>
-        public static bool ShadowModeLoggingEnabled { get; set; } = true;
-
-        /// <summary>
-        /// Conflict detection control (default: enabled).
-        /// When enabled, router detects and logs priority conflicts even in active mode.
-        /// Recommended to keep enabled in production to catch handler conflicts.
-        /// </summary>
-        public static bool ConflictDetectionEnabled { get; set; } = true;
-
-        /// <summary>
-        /// Lazy initialization - discovers all IKeyboardInputHandler implementations via reflection.
-        /// Called once on first ProcessInput call.
-        /// </summary>
-        private static void EnsureInitialized()
+        public static void Initialize(IEnumerable<IKeyboardInputHandler> registeredHandlers)
         {
-            if (allHandlers != null)
-                return;
+            handlers = registeredHandlers
+                .OrderBy(h => (int)h.Priority)
+                .ToList();
 
-            try
-            {
-                // Discover all IKeyboardInputHandler implementations
-                var handlerTypes = Assembly.GetExecutingAssembly()
-                    .GetTypes()
-                    .Where(t => typeof(IKeyboardInputHandler).IsAssignableFrom(t)
-                        && !t.IsInterface && !t.IsAbstract);
-
-                allHandlers = handlerTypes
-                    .Select(GetHandlerInstance)
-                    .Where(h => h != null)
-                    .OrderBy(h => h.Priority)
-                    .ToList();
-
-                Log.Message($"[KeyboardInputRouter] Successfully initialized with {allHandlers.Count} handlers");
-
-                if (ShadowModeLoggingEnabled && allHandlers.Count > 0)
-                {
-                    LogPriorityTable();
-                }
-            }
-            catch (Exception ex)
-            {
-                Log.Error($"[KeyboardInputRouter] Failed to initialize: {ex}");
-                allHandlers = new List<IKeyboardInputHandler>(); // Empty list to prevent re-initialization attempts
-            }
+            ValidateRegistry();
+            Log.Message($"[KeyboardInputRouter] Initialized with {handlers.Count} handlers");
         }
 
         /// <summary>
-        /// Gets handler instance from type (supports singleton pattern for static State classes).
+        /// Process keyboard input. Handles frame isolation internally.
         /// </summary>
-        private static IKeyboardInputHandler GetHandlerInstance(Type type)
-        {
-            try
-            {
-                // Try static Instance field (for static State classes)
-                var instanceField = type.GetField("Instance", BindingFlags.Public | BindingFlags.Static);
-                if (instanceField != null)
-                {
-                    return instanceField.GetValue(null) as IKeyboardInputHandler;
-                }
-
-                // Try static Instance property (for static State classes)
-                var instanceProperty = type.GetProperty("Instance", BindingFlags.Public | BindingFlags.Static);
-                if (instanceProperty != null)
-                {
-                    return instanceProperty.GetValue(null) as IKeyboardInputHandler;
-                }
-
-                // For regular classes, try instantiation
-                return Activator.CreateInstance(type) as IKeyboardInputHandler;
-            }
-            catch (Exception ex)
-            {
-                Log.Warning($"[KeyboardInputRouter] Failed to get instance of {type.Name}: {ex.Message}");
-                return null;
-            }
-        }
-
-        /// <summary>
-        /// Process keyboard input by dispatching to handlers in priority order.
-        /// </summary>
-        /// <param name="context">Input context with key and modifiers</param>
-        /// <returns>True if event was consumed, false to continue routing</returns>
         public static bool ProcessInput(KeyboardInputContext context)
         {
-            EnsureInitialized();
-
-            if (allHandlers == null || allHandlers.Count == 0)
+            if (handlers == null || handlers.Count == 0)
+            {
+                Log.Warning("[KeyboardInputRouter] ProcessInput called before Initialize or with no handlers");
                 return false;
-
-            // Detect priority conflicts (independent of shadow mode)
-            if (ConflictDetectionEnabled)
-            {
-                DetectPriorityConflicts(context);
             }
 
-            // Shadow mode: log what would happen but don't consume events
-            if (ShadowModeEnabled)
+            // Frame isolation: if a handler closed this frame, consume Escape
+            // to prevent it propagating to parent windows
+            if (context.Key == KeyCode.Escape && WasHandlerClosedThisFrame())
             {
-                if (ShadowModeLoggingEnabled)
-                {
-                    LogShadowModeExecution(context);
-                }
-                return false; // Let UnifiedKeyboardPatch handle normally
+                ClearClosedFlag();
+                return true;
             }
 
-            // Active mode: actually route input
-            foreach (var handler in allHandlers)
+            foreach (var handler in handlers)
             {
+                if (!handler.IsActive)
+                    continue;
+
                 try
                 {
-                    if (!handler.IsActive)
-                        continue;
-
                     if (handler.HandleInput(context))
                     {
-                        return true; // Event consumed
+                        LogActiveHandlerStack(context, handler);
+                        return true;
                     }
                 }
                 catch (Exception ex)
@@ -152,59 +69,11 @@ namespace RimWorldAccess
                 }
             }
 
-            return false; // Event not consumed
+            return false;
         }
 
         /// <summary>
-        /// Detect priority conflicts among active handlers.
-        /// Runs independently of shadow mode so conflicts are caught in production.
-        /// </summary>
-        private static void DetectPriorityConflicts(KeyboardInputContext context)
-        {
-            var activeHandlers = allHandlers.Where(h => h.IsActive).ToList();
-
-            if (activeHandlers.Count == 0)
-                return;
-
-            // Detect priority conflicts (two active handlers at same priority)
-            var priorityGroups = activeHandlers.GroupBy(h => h.Priority);
-            foreach (var group in priorityGroups.Where(g => g.Count() > 1))
-            {
-                Log.Warning($"[KeyboardInputRouter] PRIORITY CONFLICT at {group.Key} for {context}: " +
-                    string.Join(", ", group.Select(h => h.GetType().Name)));
-            }
-        }
-
-        /// <summary>
-        /// Log shadow mode execution (shows which handlers would process the input).
-        /// </summary>
-        private static void LogShadowModeExecution(KeyboardInputContext context)
-        {
-            var activeHandlers = allHandlers.Where(h => h.IsActive).ToList();
-
-            if (activeHandlers.Count == 0)
-                return;
-
-            // Log execution order
-            Log.Message($"[KeyboardInputRouter] Active handlers for {context}: " +
-                string.Join(" → ", activeHandlers.Select(h => $"{h.GetType().Name}({h.Priority})")));
-        }
-
-        /// <summary>
-        /// Log priority table (called once during initialization).
-        /// </summary>
-        private static void LogPriorityTable()
-        {
-            Log.Message("[KeyboardInputRouter] Handler priority table:");
-            foreach (var handler in allHandlers)
-            {
-                Log.Message($"  {handler.Priority,4}: {handler.GetType().Name}");
-            }
-        }
-
-        /// <summary>
-        /// Notify router that a handler closed this frame (for Escape isolation).
-        /// Handlers should call this in their Close() method to prevent parent windows from also closing.
+        /// Notify router that a handler closed. Called by handlers in their Close() method.
         /// </summary>
         public static void NotifyHandlerClosed()
         {
@@ -212,30 +81,70 @@ namespace RimWorldAccess
         }
 
         /// <summary>
-        /// Check if any handler closed this frame (for Escape isolation).
-        /// UnifiedKeyboardPatch uses this to prevent Escape key from propagating to parent windows.
+        /// Check if any handler in the specified band is currently active.
         /// </summary>
-        public static bool WasAnyHandlerClosedThisFrame()
+        public static bool HasActiveHandler(InputPriorityBand band)
+        {
+            if (handlers == null)
+                return false;
+
+            return handlers.Any(h => h.Priority == band && h.IsActive);
+        }
+
+        /// <summary>
+        /// Get current input context description for screen reader announcement.
+        /// </summary>
+        public static string GetActiveContextDescription()
+        {
+            if (handlers == null)
+                return "Main game view";
+
+            var active = handlers.Where(h => h.IsActive).ToList();
+            if (active.Count == 0)
+                return "Main game view";
+
+            return string.Join(" > ", active.Select(h => h.GetType().Name.Replace("State", "")));
+        }
+
+        /// <summary>
+        /// Get registered handler types (for verification).
+        /// </summary>
+        public static HashSet<Type> GetRegisteredTypes()
+        {
+            return handlers?.Select(h => h.GetType()).ToHashSet() ?? new HashSet<Type>();
+        }
+
+        private static bool WasHandlerClosedThisFrame()
         {
             return Time.frameCount == lastClosedFrame;
         }
 
-        /// <summary>
-        /// Get all registered handlers (for debugging/testing).
-        /// </summary>
-        public static IReadOnlyList<IKeyboardInputHandler> GetHandlers()
+        private static void ClearClosedFlag()
         {
-            EnsureInitialized();
-            return allHandlers.AsReadOnly();
+            lastClosedFrame = -1;
         }
 
-        /// <summary>
-        /// Reset discovery (for testing).
-        /// </summary>
-        public static void ResetDiscovery()
+        private static void ValidateRegistry()
         {
-            allHandlers = null;
-            lastClosedFrame = -1;
+            var duplicates = handlers
+                .GroupBy(h => h.GetType())
+                .Where(g => g.Count() > 1)
+                .Select(g => g.Key.Name);
+
+            if (duplicates.Any())
+            {
+                Log.Error($"[KeyboardInputRouter] Duplicate handlers registered: {string.Join(", ", duplicates)}");
+            }
+        }
+
+        [Conditional("DEBUG")]
+        private static void LogActiveHandlerStack(KeyboardInputContext context, IKeyboardInputHandler consumedBy)
+        {
+            var activeStack = handlers
+                .Where(h => h.IsActive)
+                .Select(h => h == consumedBy ? $"[{h.GetType().Name}]" : h.GetType().Name);
+
+            Log.Message($"[KeyboardInputRouter] {context.Key} -> {string.Join(" > ", activeStack)}");
         }
     }
 }

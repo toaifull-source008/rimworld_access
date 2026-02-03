@@ -31,6 +31,10 @@ namespace RimWorldAccess
             Log.Message("[RimWorld Access] Applying Harmony patches...");
             harmony.PatchAll();
 
+            // Register keyboard input handlers
+            Log.Message("[RimWorld Access] Registering keyboard input handlers...");
+            HandlerRegistry.RegisterAll();
+
             // Log which patches were applied
             var patchedMethods = harmony.GetPatchedMethods();
             int patchCount = 0;
