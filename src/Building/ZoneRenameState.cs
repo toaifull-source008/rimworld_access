@@ -9,13 +9,23 @@ namespace RimWorldAccess
     /// Allows typing a new zone name with Enter to confirm and Escape to cancel.
     /// Uses TextInputHelper for shared text input logic.
     /// </summary>
-    public static class ZoneRenameState
+    public class ZoneRenameState : IKeyboardInputHandler
     {
+        public static readonly ZoneRenameState Instance = new ZoneRenameState();
+
+        private ZoneRenameState() { }
+
+        public InputPriorityBand Priority => InputPriorityBand.TextInput;
+        bool IKeyboardInputHandler.IsActive => isActive;
+
         private static bool isActive = false;
+
+        /// <summary>
+        /// Gets whether the rename dialog is currently active (backward compatibility).
+        /// </summary>
+        public static bool IsActive => isActive;
         private static Zone currentZone = null;
         private static string originalName = "";
-
-        public static bool IsActive => isActive;
 
         /// <summary>
         /// Opens the rename dialog for the specified zone.
@@ -46,6 +56,7 @@ namespace RimWorldAccess
             currentZone = null;
             originalName = "";
             TextInputHelper.Clear();
+            KeyboardInputRouter.NotifyHandlerClosed();
         }
 
         /// <summary>
@@ -127,6 +138,83 @@ namespace RimWorldAccess
             TolkHelper.Speak("Rename cancelled");
             Log.Message("Zone rename cancelled");
             Close();
+        }
+
+        /// <summary>
+        /// Handles keyboard input via the new input system.
+        /// </summary>
+        public bool HandleInput(KeyboardInputContext context)
+        {
+            if (!isActive)
+                return false;
+
+            KeyCode key = context.Key;
+
+            // Handle Escape - cancel
+            if (key == KeyCode.Escape)
+            {
+                Cancel();
+                return true;
+            }
+
+            // Handle Enter - confirm
+            if (key == KeyCode.Return || key == KeyCode.KeypadEnter)
+            {
+                Confirm();
+                return true;
+            }
+
+            // Handle Backspace
+            if (key == KeyCode.Backspace)
+            {
+                HandleBackspace();
+                return true;
+            }
+
+            // Handle Ctrl+A to read current text
+            if (context.Ctrl && key == KeyCode.A)
+            {
+                ReadCurrentText();
+                return true;
+            }
+
+            // Handle character input
+            bool isLetter = key >= KeyCode.A && key <= KeyCode.Z;
+            bool isNumber = key >= KeyCode.Alpha0 && key <= KeyCode.Alpha9;
+            bool isSpace = key == KeyCode.Space;
+            bool isUnderscore = context.Shift && key == KeyCode.Minus; // Shift + - = _
+            bool isHyphen = !context.Shift && key == KeyCode.Minus;
+
+            if (isLetter || isNumber || isSpace || isUnderscore || isHyphen)
+            {
+                char c;
+                if (isLetter)
+                {
+                    // Check for shift to determine upper/lower case
+                    c = context.Shift ? (char)('A' + (key - KeyCode.A)) : (char)('a' + (key - KeyCode.A));
+                }
+                else if (isNumber)
+                {
+                    c = (char)('0' + (key - KeyCode.Alpha0));
+                }
+                else if (isSpace)
+                {
+                    c = ' ';
+                }
+                else if (isUnderscore)
+                {
+                    c = '_';
+                }
+                else // isHyphen
+                {
+                    c = '-';
+                }
+
+                HandleCharacter(c);
+                return true;
+            }
+
+            return false;
         }
     }
 }

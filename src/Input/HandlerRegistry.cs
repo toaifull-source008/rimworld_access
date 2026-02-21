@@ -17,12 +17,15 @@ namespace RimWorldAccess
             var handlers = new List<IKeyboardInputHandler>
             {
                 // TextInput band - blocks all other input
-                // TODO: Add text input handlers as they are migrated
-                // Examples: ZoneRenameState, StorageRenameState, DialogTextFieldState
+                ZoneRenameState.Instance,
+                // TODO: Add more text input handlers as they are migrated
+                // Examples: StorageRenameState, DialogTextFieldState
 
                 // Modal band - overlays atop menus
-                // TODO: Add modal handlers as they are migrated
-                // Examples: QuantityMenuState, WindowlessInspectionState, ConfirmationDialogState
+                QuantityMenuState.Instance,
+                WindowlessInspectionState.Instance,
+                // TODO: Add more modal handlers as they are migrated
+                // Examples: ConfirmationDialogState
 
                 // Menu band - primary menus (mutually exclusive)
                 // TODO: Add menu handlers as they are migrated

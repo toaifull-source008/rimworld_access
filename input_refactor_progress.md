@@ -1,9 +1,10 @@
 # Input Refactor Implementation Progress
 
-## Status: Infrastructure Complete, Migration Pending
+## Status: Phase 1 Complete - First 3 States Migrated
 
 **Date**: 2026-02-03
 **Branch**: refactor/input_redesign
+**Last Updated**: 2026-02-03 (Phase 1 completed)
 
 ## Completed ✅
 
@@ -25,6 +26,42 @@
 
 ### 3. Files Deleted
 - ✅ **InputHandlerPriority.cs** - Replaced by InputPriorityBand enum
+
+### 4. Phase 1 Migration Complete ✅
+**Migrated States (3 total):**
+
+**TextInput Band:**
+- ✅ **ZoneRenameState.cs** - Zone rename text input
+  - Implements IKeyboardInputHandler
+  - Priority: TextInput (band 0)
+  - Handles: Enter (confirm), Escape (cancel), alphanumeric input, backspace
+  - Static IsActive property maintained for backward compatibility
+
+**Modal Band:**
+- ✅ **QuantityMenuState.cs** - Quantity selector overlay
+  - Implements IKeyboardInputHandler
+  - Priority: Modal (band 1)
+  - Handles: Up/Down (navigate), Home/End (jump), Enter (confirm), Escape (cancel), numeric input
+  - Legacy HandleInput(KeyCode, bool, bool, bool) method preserved for backward compatibility
+  - Static IsActive property maintained for backward compatibility
+
+- ✅ **WindowlessInspectionState.cs** - Inspection panel
+  - Implements IKeyboardInputHandler
+  - Priority: Modal (band 1)
+  - Handles: Up/Down (navigate), Left/Right (collapse/expand), Home/End, Enter (activate), Escape (close), typeahead search
+  - Legacy HandleInput(Event) method preserved for backward compatibility
+  - Static IsActive property maintained for backward compatibility
+
+**Registration:**
+- All three handlers registered in `HandlerRegistry.RegisterAll()`
+- Build successful with no errors or warnings
+- Router now actively handles input for these states
+- ✅ **Legacy manual routing removed** for these three states in UnifiedKeyboardPatch.cs:
+  - Line 107: Removed ZoneRenameState early return block
+  - Line 494-503: Removed WindowlessInspectionState.HandleInput (caravan context)
+  - Line 516-530: Removed QuantityMenuState.HandleInput
+  - Line 3252-3259: Removed WindowlessInspectionState.HandleInput (general context)
+- Router is now the **sole handler** for these three states
 
 ## Next Steps
 
@@ -130,10 +167,11 @@ Once all states are migrated:
 - [x] Project compiles without errors or warnings
 - [x] Router initializes at mod startup
 - [x] Verification system runs in DEBUG mode
-- [ ] Migrate at least one state to verify the pattern works
+- [x] Migrate at least one state to verify the pattern works (3 states migrated!)
 - [ ] Test that router correctly handles priority conflicts
 - [ ] Test frame isolation (Escape key doesn't double-close)
-- [ ] Test in-game with screen reader
+- [ ] Test in-game with screen reader (zone rename, quantity menu, inspection)
+- [ ] Verify backward compatibility (legacy code still works)
 
 ## Notes
 

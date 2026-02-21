@@ -104,7 +104,8 @@ namespace RimWorldAccess
             // ===== PRIORITY -1: Block ALL keys if text input mode is active =====
             // Zone/storage rename needs to capture text input, so block everything here
             // TextInputCapturePatch will handle the input
-            if (ZoneRenameState.IsActive || StorageRenameState.IsActive)
+            // Note: ZoneRenameState now handled by router
+            if (StorageRenameState.IsActive)
             {
                 // Don't process any keys in this patch when renaming
                 return;
@@ -491,15 +492,7 @@ namespace RimWorldAccess
             }
 
             // ===== PRIORITY 0.22: Handle inspection menu EARLY if opened from caravan/split/inspect/transport pod dialogs =====
-            // This ensures Escape in inspection doesn't get caught by other handlers
-            // Note: Window.OnCancelKeyPressed is patched in CaravanFormationPatch and TransportPodPatch to block RimWorld's Cancel handling
-            if (WindowlessInspectionState.IsActive && (CaravanFormationState.IsActive || SplitCaravanState.IsActive || CaravanInspectState.IsActive || TransportPodLoadingState.IsActive))
-            {
-                if (WindowlessInspectionState.HandleInput(Event.current))
-                {
-                    return;
-                }
-            }
+            // Note: WindowlessInspectionState now handled by router (Modal band)
 
             // ===== PRIORITY 0.24: Handle stat breakdown if active =====
             // This overlays caravan summary view when inspecting stat factors
@@ -513,20 +506,7 @@ namespace RimWorldAccess
             }
 
             // ===== PRIORITY 0.25: Handle quantity menu if active =====
-            // This overlays caravan formation/split dialogs
-            // Note: Window.OnCancelKeyPressed is patched in CaravanFormationPatch to block RimWorld's Cancel handling
-            if (QuantityMenuState.IsActive && !WindowlessDialogState.IsActive)
-            {
-                bool shift = Event.current.shift;
-                bool ctrl = Event.current.control;
-                bool alt = Event.current.alt;
-
-                if (QuantityMenuState.HandleInput(key, shift, ctrl, alt))
-                {
-                    Event.current.Use();
-                    return;
-                }
-            }
+            // Note: QuantityMenuState now handled by router (Modal band)
 
             // ===== PRIORITY 0.27: Handle shelf linking selection mode if active =====
             // This is the custom storage linking mode activated from our gizmos
@@ -3270,13 +3250,7 @@ namespace RimWorldAccess
             }
 
             // ===== PRIORITY 4.8: Handle inspection menu if active =====
-            if (WindowlessInspectionState.IsActive)
-            {
-                if (WindowlessInspectionState.HandleInput(Event.current))
-                {
-                    return;
-                }
-            }
+            // Note: WindowlessInspectionState now handled by router (Modal band)
 
             // ===== PRIORITY 4.805: Handle inventory menu if active =====
             if (WindowlessInventoryState.IsActive)

@@ -12,9 +12,21 @@ namespace RimWorldAccess
     /// Manages the windowless inspection panel state.
     /// Uses a tree structure with inline expansion/collapse.
     /// </summary>
-    public static class WindowlessInspectionState
+    public class WindowlessInspectionState : IKeyboardInputHandler
     {
-        public static bool IsActive { get; private set; } = false;
+        public static readonly WindowlessInspectionState Instance = new WindowlessInspectionState();
+
+        private WindowlessInspectionState() { }
+
+        public InputPriorityBand Priority => InputPriorityBand.Modal;
+        bool IKeyboardInputHandler.IsActive => isActive;
+
+        private static bool isActive = false;
+
+        /// <summary>
+        /// Gets whether the inspection menu is currently active (backward compatibility).
+        /// </summary>
+        public static bool IsActive => isActive;
 
         private static TypeaheadSearchHelper typeahead = new TypeaheadSearchHelper();
         public static TypeaheadSearchHelper Typeahead => typeahead;
@@ -65,7 +77,7 @@ namespace RimWorldAccess
                 lastChildPerParent.Clear();
                 MenuHelper.ResetLevel("Inspection");
 
-                IsActive = true;
+                isActive = true;
                 SoundDefOf.TabOpen.PlayOneShotOnCamera();
                 typeahead.ClearSearch();
 
@@ -154,7 +166,7 @@ namespace RimWorldAccess
                 lastChildPerParent.Clear();
                 MenuHelper.ResetLevel("Inspection");
 
-                IsActive = true;
+                isActive = true;
                 SoundDefOf.TabOpen.PlayOneShotOnCamera();
                 typeahead.ClearSearch();
                 AnnounceCurrentSelection();
@@ -204,7 +216,7 @@ namespace RimWorldAccess
                 lastChildPerParent.Clear();
                 MenuHelper.ResetLevel("Inspection");
 
-                IsActive = true;
+                isActive = true;
                 SoundDefOf.TabOpen.PlayOneShotOnCamera();
                 typeahead.ClearSearch();
 
@@ -249,7 +261,7 @@ namespace RimWorldAccess
         /// </summary>
         public static void Close()
         {
-            IsActive = false;
+            isActive = false;
             rootItem = null;
             visibleItems = null;
             lastChildPerParent.Clear();
@@ -271,6 +283,8 @@ namespace RimWorldAccess
                 }
                 previousSelection.Clear();
             }
+
+            KeyboardInputRouter.NotifyHandlerClosed();
         }
 
         /// <summary>
@@ -887,15 +901,24 @@ namespace RimWorldAccess
         }
 
         /// <summary>
-        /// Handles keyboard input for the inspection menu.
+        /// Handles keyboard input for the inspection menu (legacy method for backward compatibility).
         /// Returns true if the input was handled.
         /// </summary>
         public static bool HandleInput(Event ev)
         {
-            if (!IsActive)
+            if (ev.type != EventType.KeyDown)
                 return false;
 
-            if (ev.type != EventType.KeyDown)
+            var context = new KeyboardInputContext(ev);
+            return Instance.HandleInput(context);
+        }
+
+        /// <summary>
+        /// Handles keyboard input via the new input system.
+        /// </summary>
+        public bool HandleInput(KeyboardInputContext context)
+        {
+            if (!isActive)
                 return false;
 
             try
@@ -903,10 +926,12 @@ namespace RimWorldAccess
                 // Check if any tab state is active and delegate input to it
                 if (HealthTabState.IsActive)
                 {
-                    return HealthTabState.HandleInput(ev);
+                    // HealthTabState still uses Event-based input
+                    // This is okay for now - it will be migrated later
+                    return false; // Let HealthTabState handle it through its own routing
                 }
 
-                KeyCode key = ev.keyCode;
+                KeyCode key = context.Key;
 
                 // Handle Escape - clear search FIRST, then close
                 if (key == KeyCode.Escape)
@@ -914,11 +939,9 @@ namespace RimWorldAccess
                     if (typeahead.HasActiveSearch)
                     {
                         typeahead.ClearSearchAndAnnounce();
-                        ev.Use();
                         return true;
                     }
                     ClosePanel();
-                    ev.Use();
                     return true;
                 }
 
@@ -932,7 +955,6 @@ namespace RimWorldAccess
                             selectedIndex = newIndex;
                         AnnounceWithSearch();
                     }
-                    ev.Use();
                     return true;
                 }
 
@@ -955,7 +977,6 @@ namespace RimWorldAccess
                         // Navigate normally (either no search active, OR search with no matches)
                         SelectPrevious();
                     }
-                    ev.Use();
                     return true;
                 }
 
@@ -978,7 +999,6 @@ namespace RimWorldAccess
                         // Navigate normally (either no search active, OR search with no matches)
                         SelectNext();
                     }
-                    ev.Use();
                     return true;
                 }
 
@@ -986,7 +1006,6 @@ namespace RimWorldAccess
                 if (key == KeyCode.RightArrow)
                 {
                     Expand();
-                    ev.Use();
                     return true;
                 }
 
@@ -994,29 +1013,26 @@ namespace RimWorldAccess
                 if (key == KeyCode.LeftArrow)
                 {
                     Collapse();
-                    ev.Use();
                     return true;
                 }
 
                 // Handle Home - jump to first (Ctrl = absolute, otherwise = within node)
                 if (key == KeyCode.Home)
                 {
-                    if (ev.control)
+                    if (context.Ctrl)
                         JumpToAbsoluteFirst();
                     else
                         JumpToFirst();
-                    ev.Use();
                     return true;
                 }
 
                 // Handle End - jump to last (Ctrl = absolute, otherwise = within node)
                 if (key == KeyCode.End)
                 {
-                    if (ev.control)
+                    if (context.Ctrl)
                         JumpToAbsoluteLast();
                     else
                         JumpToLast();
-                    ev.Use();
                     return true;
                 }
 
@@ -1024,7 +1040,6 @@ namespace RimWorldAccess
                 if (key == KeyCode.Return || key == KeyCode.KeypadEnter)
                 {
                     ActivateAction();
-                    ev.Use();
                     return true;
                 }
 
@@ -1032,16 +1047,14 @@ namespace RimWorldAccess
                 if (key == KeyCode.Delete)
                 {
                     DeleteItem();
-                    ev.Use();
                     return true;
                 }
 
                 // Handle * key - expand all sibling categories (WCAG tree view pattern)
-                bool isStar = key == KeyCode.KeypadMultiply || (ev.shift && key == KeyCode.Alpha8);
+                bool isStar = key == KeyCode.KeypadMultiply || (context.Shift && key == KeyCode.Alpha8);
                 if (isStar)
                 {
                     ExpandAllSiblings();
-                    ev.Use();
                     return true;
                 }
 
@@ -1066,7 +1079,6 @@ namespace RimWorldAccess
                     {
                         TolkHelper.Speak($"No matches for '{typeahead.LastFailedSearch}'");
                     }
-                    ev.Use();
                     return true;
                 }
             }

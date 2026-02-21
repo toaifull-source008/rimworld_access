@@ -13,9 +13,21 @@ namespace RimWorldAccess
     /// Opens when pressing Enter on an item in the caravan formation screen.
     /// Supports typeahead to jump to any quantity by typing numbers.
     /// </summary>
-    public static class QuantityMenuState
+    public class QuantityMenuState : IKeyboardInputHandler
     {
+        public static readonly QuantityMenuState Instance = new QuantityMenuState();
+
+        private QuantityMenuState() { }
+
+        public InputPriorityBand Priority => InputPriorityBand.Modal;
+        bool IKeyboardInputHandler.IsActive => isActive;
+
         private static bool isActive = false;
+
+        /// <summary>
+        /// Gets whether the quantity menu is currently active (backward compatibility).
+        /// </summary>
+        public static bool IsActive => isActive;
         private static TransferableOneWay currentTransferable;
         private static int selectedQuantity = 1;
         private static List<int> quantityIncrements = new List<int>();
@@ -34,11 +46,6 @@ namespace RimWorldAccess
         private static string numericBuffer = "";
         private static float lastNumericInputTime = 0f;
         private const float NUMERIC_INPUT_TIMEOUT = 10.0f;
-
-        /// <summary>
-        /// Gets whether the quantity menu is currently active.
-        /// </summary>
-        public static bool IsActive => isActive;
 
         /// <summary>
         /// Gets the typeahead helper for input routing.
@@ -98,6 +105,7 @@ namespace RimWorldAccess
             onConfirm = null;
             numericBuffer = "";
             typeahead.ClearSearch();
+            KeyboardInputRouter.NotifyHandlerClosed();
         }
 
         /// <summary>
@@ -473,13 +481,27 @@ namespace RimWorldAccess
         }
 
         /// <summary>
-        /// Handles keyboard input for the quantity menu.
+        /// Handles keyboard input for the quantity menu (legacy method for backward compatibility).
         /// Returns true if input was handled.
         /// </summary>
         public static bool HandleInput(KeyCode key, bool shift, bool ctrl, bool alt)
         {
+            var context = new KeyboardInputContext(key, shift, ctrl, alt);
+            return Instance.HandleInput(context);
+        }
+
+        /// <summary>
+        /// Handles keyboard input via the new input system.
+        /// </summary>
+        public bool HandleInput(KeyboardInputContext context)
+        {
             if (!isActive)
                 return false;
+
+            KeyCode key = context.Key;
+            bool shift = context.Shift;
+            bool ctrl = context.Ctrl;
+            bool alt = context.Alt;
 
             // Escape - cancel
             if (key == KeyCode.Escape)
