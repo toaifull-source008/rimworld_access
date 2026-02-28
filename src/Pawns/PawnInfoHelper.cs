@@ -594,5 +594,30 @@ namespace RimWorldAccess
 
             return sb.ToString().TrimEnd();
         }
+
+        /// <summary>
+        /// Gets the latest social interaction for the pawn.
+        /// </summary>
+        public static string GetLatestSocialInteraction(Pawn pawn)
+        {
+            if (Find.PlayLog == null) return null;
+
+            var entries = new List<(int ageTicks, string text)>();
+            foreach (LogEntry entry in Find.PlayLog.AllEntries)
+            {
+                if (!entry.Concerns(pawn))
+                    continue;
+
+                string entryText = entry.ToGameStringFromPOV(pawn).StripTags();
+                entries.Add((entry.Age, entryText));
+            }
+
+            if (entries.Count == 0) return null;
+
+            // Sort by age (most recent first)
+            entries.Sort((a, b) => a.ageTicks.CompareTo(b.ageTicks));
+
+            return entries[0].text;
+        }
     }
 }
