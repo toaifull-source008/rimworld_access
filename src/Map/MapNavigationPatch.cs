@@ -18,6 +18,8 @@ namespace RimWorldAccess
     {
         private static bool hasAnnouncedThisFrame = false;
         private static int lastProcessedFrame = -1;
+        private static Pawn lastTrackedPawn = null;
+        private static LogEntry lastReadInteraction = null;
 
         /// <summary>
         /// Updates the map navigation suppression flag based on active menus.
@@ -176,6 +178,34 @@ namespace RimWorldAccess
             // - Frame deduplication
             // - Map changes check and initialization
             // - Map switching with Shift+comma/period
+            // Real-time polling for social interactions
+            if (RimWorldAccessMod_Settings.Settings?.ReadPawnSocialInteractions == true && MapNavigationState.CurrentCameraMode == CameraFollowMode.Pawn)
+            {
+                Pawn selectedPawn = Find.Selector?.SingleSelectedThing as Pawn;
+                if (selectedPawn != null)
+                {
+                    if (selectedPawn != lastTrackedPawn)
+                    {
+                        lastTrackedPawn = selectedPawn;
+                        lastReadInteraction = PawnInfoHelper.GetLatestSocialLogEntry(selectedPawn);
+                    }
+                    else
+                    {
+                        LogEntry currentLatest = PawnInfoHelper.GetLatestSocialLogEntry(selectedPawn);
+                        if (currentLatest != null && currentLatest != lastReadInteraction)
+                        {
+                            lastReadInteraction = currentLatest;
+                            string entryText = currentLatest.ToGameStringFromPOV(selectedPawn).StripTags();
+                            TolkHelper.Speak($"{selectedPawn.LabelShort}: {entryText}");
+                        }
+                    }
+                }
+                else
+                {
+                    lastTrackedPawn = null;
+                    lastReadInteraction = null;
+                }
+            }
 
             // Let original CameraDriver.Update() run for non-arrow-key functionality
             // (zoom, following, etc.)
