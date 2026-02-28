@@ -322,7 +322,18 @@ namespace RimWorldAccess
             if (string.IsNullOrEmpty(currentTask))
                 currentTask = "Idle";
 
-            TolkHelper.Speak($"{selectedPawn.LabelShort} selected - {currentTask}");
+            string announcement = $"{selectedPawn.LabelShort} selected - {currentTask}";
+
+            if (RimWorldAccessMod_Settings.Settings?.ReadPawnSocialInteractions == true)
+            {
+                string lastInteraction = PawnInfoHelper.GetLatestSocialInteraction(selectedPawn);
+                if (!string.IsNullOrEmpty(lastInteraction))
+                {
+                    announcement += $" - Last interaction: {lastInteraction}";
+                }
+            }
+
+            TolkHelper.Speak(announcement);
 
             return false; // Block original method
         }
@@ -375,7 +386,18 @@ namespace RimWorldAccess
             if (string.IsNullOrEmpty(currentTask))
                 currentTask = "Idle";
 
-            TolkHelper.Speak($"{selectedPawn.LabelShort} selected - {currentTask}");
+            string announcement = $"{selectedPawn.LabelShort} selected - {currentTask}";
+
+            if (RimWorldAccessMod_Settings.Settings?.ReadPawnSocialInteractions == true)
+            {
+                string lastInteraction = PawnInfoHelper.GetLatestSocialInteraction(selectedPawn);
+                if (!string.IsNullOrEmpty(lastInteraction))
+                {
+                    announcement += $" - Last interaction: {lastInteraction}";
+                }
+            }
+
+            TolkHelper.Speak(announcement);
 
             return false; // Block original method
         }

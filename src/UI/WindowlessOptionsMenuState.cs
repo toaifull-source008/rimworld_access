@@ -625,6 +625,9 @@ namespace RimWorldAccess
             accessSettings.Settings.Add(new CheckboxSetting("Show Pawn Activity on Map",
                 () => RimWorldAccessMod_Settings.Settings?.ShowPawnActivityOnMap ?? true,
                 v => { if (RimWorldAccessMod_Settings.Settings != null) RimWorldAccessMod_Settings.Settings.ShowPawnActivityOnMap = v; }));
+            accessSettings.Settings.Add(new CheckboxSetting("Read Pawn Social Interactions",
+                () => RimWorldAccessMod_Settings.Settings?.ReadPawnSocialInteractions ?? false,
+                v => { if (RimWorldAccessMod_Settings.Settings != null) RimWorldAccessMod_Settings.Settings.ReadPawnSocialInteractions = v; }));
             categories.Add(accessSettings);
 
             // Mod Settings Category - list all mods that have settings

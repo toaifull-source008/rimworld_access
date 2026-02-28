@@ -27,11 +27,18 @@ namespace RimWorldAccess
         /// </summary>
         public bool ShowPawnActivityOnMap = true;
 
+        /// <summary>
+        /// When true, recent social interactions are read when selecting a pawn.
+        /// Default: false.
+        /// </summary>
+        public bool ReadPawnSocialInteractions = false;
+
         public override void ExposeData()
         {
             Scribe_Values.Look(ref WrapNavigation, "WrapNavigation", false);
             Scribe_Values.Look(ref AnnouncePosition, "AnnouncePosition", true);
             Scribe_Values.Look(ref ShowPawnActivityOnMap, "ShowPawnActivityOnMap", true);
+            Scribe_Values.Look(ref ReadPawnSocialInteractions, "ReadPawnSocialInteractions", false);
             base.ExposeData();
         }
     }
@@ -62,6 +69,7 @@ namespace RimWorldAccess
             listing.CheckboxLabeled("Wrap navigation (loop from end to beginning)", ref Settings.WrapNavigation);
             listing.CheckboxLabeled("Announce position (e.g., '3 of 7')", ref Settings.AnnouncePosition);
             listing.CheckboxLabeled("Show pawn activity on map cursor movement", ref Settings.ShowPawnActivityOnMap);
+            listing.CheckboxLabeled("Read pawn social interactions on selection", ref Settings.ReadPawnSocialInteractions);
 
             listing.End();
         }
